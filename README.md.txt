@@ -1,0 +1,1 @@
+This is a sample exam prepared for the OHTN Biostatistician hiring process.
