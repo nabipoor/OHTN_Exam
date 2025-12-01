@@ -18,7 +18,7 @@ PROC CONTENTS DATA=WORK.adhere; RUN;
 
 libname mj '/home/u61968265';
 
-/* Link adherence and clinical visits bu ID and visit date */
+/* Link adherence and clinical visits by ID and visit date */
 proc sql;
 create table mj.cohort as
 select a.*, b.*
@@ -42,8 +42,7 @@ create table duplicates as
 select * 
 from mj.cohort1
 group by ID, vis_dat
-having count(*) > 1
-order by id, vis_dat;
+having count(*) > 1;
 quit;
 /* There is no duplicates */
 
@@ -126,7 +125,7 @@ class art_status;
 var viral_load;
 run;
 
-/* data are cosnsistent and in the range */
+/* data are consistent and in the range */
 
 
 /* write a SAS macro that takes a dataset and returns the number of rows and columns */
@@ -156,7 +155,7 @@ run;
 %let rc = %sysfunc(close(&ds));
 
 /* If NOBS missing, force SAS to count rows */
-%if %superq(nobs) = %then %do;
+%if %superq(nobs) =   %then %do;
         data _null_;
             if 0 then set &data nobs=_n;
             call symputx('nobs', _n);
@@ -170,30 +169,70 @@ run;
 
 %mend nrow_ncol;
 
-%nrow_ncol(data = mj.cohort3)
+%nrow_ncol(data = mj.cohort3);
 
 
 
+/*________2nd edition: start with exam question that have not been answered_______*/
+/* Create a new variable viral_suppression (Viral_Load <= 200 → 1, else 0) */
+
+data mj.cohort4;
+set mj.cohort3;
+viral_suppression = 0;
+if viral_load <= 200 then viral_suppression = 1;
+run;
+
+/* Calculate the mean CD4 count and adherence percentage by viral_suppression. */
+proc means data=mj.cohort4;
+class viral_suppression;
+var cd4_count art_adherence_percent;
+run;
+
+/* Describe how you would check for missing data in SAS and handle it. */
+/* ONly on mj.cohort --> use proc freq/mean for categorical/numerical--> print detail --> no need flag 
+use proc mi for imputation and remove if one row is completely missing */
+proc freq data=mj.cohort;
+table housing_stability art_status / missing;
+run;
+/* no missing */
+
+proc means data=mj.cohort n nmiss;
+var art_adherence_percent hiv_stigma_score age viral_load cd4_count;
+run; 
+/* art_adherence_percent and viral_load each 1 missing */
+
+proc print data=mj.cohort;
+where missing(art_adherence_percent) or missing(viral_load);
+run;
+/* both missing values belong to ID=103 this seems informative missing --> then MNAR and use multiple imputation */
+
+/* the missing values imputed using multiple impuation above by proc mi */
 
 
+/* ____Select all visits where ART_Adherence_percent < 80% and Viral_Load > 1000.____ */
+proc sql;
+create table temp as
+select ID, count(*) as visit_count
+from mj.cohort4
+where ART_Adherence_percent < 80 and Viral_Load > 1000
+group by ID;
+quit;
+/* The patient with ID=101 is not included in these conditions. */
 
 
+/* ___Write an SQL query to calculate average viral load and average CD4 count per Housing_Stability category.___ */
+proc sql;
+create table temp2 as
+select housing_stability, avg(viral_load) as viral_mean, avg(cd4_count) as cd4_mean
+from mj.cohort4
+group by housing_stability;
+quit;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/* similar results by SAS procs */
+proc means data=mj.cohort4;
+class housing_stability;
+var viral_load cd4_count;
+run;
 
 
 
