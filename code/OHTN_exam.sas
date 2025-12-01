@@ -235,6 +235,24 @@ var viral_load cd4_count;
 run;
 
 
+/* add time = visit_date – baseline_date, where the baseline_date is set to one month prior 
+to the earliest visit date  */
+
+data mj.cohort5;
+set mj.cohort4;
+format M date9.;
+M = '15DEC2018'd;
+time = vis_dat - M;
+drop M;
+run;
+
+proc sql;
+create table mj.cohort6 as
+select *, min(age) as baseline_age
+from mj.cohort5
+group by ID;
+quit;
+
 
 
 
