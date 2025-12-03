@@ -1,4 +1,3 @@
-consistent
 /* Import adherence and clinical visits*/
 PROC IMPORT DATAFILE='/home/u61968265/adherence_social.xlsx' 
 	DBMS=XLSX
@@ -236,7 +235,7 @@ run;
 
 
 /* add time = visit_date – baseline_date, where the baseline_date is set to one month prior 
-to the earliest visit date  */
+to the earliest visit date  and choose baseline age*/
 
 data mj.cohort5;
 set mj.cohort4;
@@ -255,4 +254,83 @@ quit;
 
 
 
+/* _______________________3rd round of exam preparation____________________ */
 
+/* Count visits per patient in data step and proc sql */
+data counts;
+set mj.cohort5;
+by id;
+if first.id then n=0;
+n+1;
+if last.id then output;
+keep id n;
+run;
+
+proc sql;
+create table counts as
+select id, count(*) as n
+from mj.cohort5
+group by id;
+quit;
+
+/* read and merge in data step */
+
+libname myexl1 xlsx "/home/u61968265/adherence_social.xlsx";
+libname myexl2 xlsx '/home/u61968265/clinical_visits.xlsx';
+
+
+data adhere;
+set myexl1.adherence_social; 
+RUN;
+
+data clinic;
+set myexl2.clinical_visits; 
+RUN;
+
+proc sort data=adhere; by id visit_date; run;
+proc sort data=clinic; by id visit_date; run;
+
+data mj.coh;
+merge adhere (in=a) clinic (in=b);
+by id visit_date;
+if a; /*left merge*/
+run;
+
+
+/* output only first id */
+data fr;
+set mj.coh;
+by id;
+if first.id then output;
+run;
+
+/* sum of viral_load and cd4_count by array in data step */
+data temp;
+set mj.coh;
+array ar[2] viral_load--cd4_count;
+total=0;
+do i=1 to 2;
+total = total + ar[i]; /*can be replace by only total + ar[i]*/
+end;
+keep id viral_load cd4_count total;
+run;
+
+/* use array to replace missing values with zero */
+data temp;
+set mj.coh;
+array ar[5] art_adherence_percent hive_stigma_score age viral_load cd4_count;
+do i=1 to 5;
+if ar[i]=. then ar[i]=0;
+end;
+run;
+
+/* logistic regression viral_suppression ~ age adherence housing*/
+proc logistic data=mj.cohort6;
+  class housing_stability (ref='Stable');
+  model viral_suppression(event='1') = age art_adherence_percent housing_stability;
+run;
+
+/* find mean std min max for age*/
+proc means data=mj.coh mean std min max;
+var age;
+run;
